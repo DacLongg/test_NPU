@@ -180,7 +180,7 @@ class BenchmarkApp:
         self.canvas.pack(fill="both", expand=True)
 
         columns = ("device", "latency", "throughput", "hint", "requests")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=16)
+        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=8)
         self.tree.heading("device", text="Device")
         self.tree.heading("latency", text="Median Latency (ms)")
         self.tree.heading("throughput", text="Median Throughput (FPS)")
@@ -196,6 +196,25 @@ class BenchmarkApp:
         self.summary_var = tk.StringVar(value="No benchmark result yet.")
         ttk.Label(table_frame, textvariable=self.summary_var, style="Muted.TLabel", wraplength=420).pack(
             anchor="w", pady=(10, 0)
+        )
+
+        explain_frame = ttk.LabelFrame(table_frame, text="Interpretation", padding=10)
+        explain_frame.pack(fill="x", pady=(12, 0))
+        self.explain_text = tk.Text(
+            explain_frame,
+            height=18,
+            wrap="word",
+            bg="#fffdf8",
+            fg="#1f2937",
+            relief="solid",
+            borderwidth=1,
+        )
+        explain_scroll = ttk.Scrollbar(explain_frame, orient="vertical", command=self.explain_text.yview)
+        self.explain_text.configure(yscrollcommand=explain_scroll.set)
+        self.explain_text.pack(side="left", fill="both", expand=True)
+        explain_scroll.pack(side="right", fill="y")
+        self._set_explanation(
+            "Run a benchmark to generate an automatic explanation and conclusion."
         )
 
     def _add_inline_row(self, parent, row, items):
@@ -358,6 +377,7 @@ class BenchmarkApp:
             )
         )
         self.summary_var.set(" | ".join(summary_lines))
+        self._set_explanation(self._build_interpretation(config, results, failures))
 
     def _on_benchmark_crash(self, error_text):
         self.is_running = False
@@ -369,6 +389,9 @@ class BenchmarkApp:
         for item in self.tree.get_children():
             self.tree.delete(item)
         self.canvas.delete("all")
+        self._set_explanation(
+            "Run a benchmark to generate an automatic explanation and conclusion."
+        )
 
     def _render_results(self, results):
         self._clear_results()
@@ -385,6 +408,95 @@ class BenchmarkApp:
                 ),
             )
         self._draw_chart(results)
+
+    def _set_explanation(self, text):
+        self.explain_text.configure(state="normal")
+        self.explain_text.delete("1.0", tk.END)
+        self.explain_text.insert("1.0", text)
+        self.explain_text.configure(state="disabled")
+
+    def _build_interpretation(self, config, results, failures):
+        lines = []
+        if config["model_type"] == "cnn":
+            workload = "synthetic CNN, batch {}, input {}x{}x{}".format(
+                config["batch"], config["channels"], config["height"], config["width"]
+            )
+        else:
+            workload = "synthetic MLP, batch {}, features {}, layers {}".format(
+                config["batch"], config["features"], config["layers"]
+            )
+
+        lines.append(
+            "This run used {} with {} mode and {} parallel request(s).".format(
+                workload, config["hint"], config["num_requests"]
+            )
+        )
+
+        best_latency = min(results, key=lambda item: item["avg_latency_ms"])
+        best_throughput = max(results, key=lambda item: item["throughput_fps"])
+        lines.append(
+            "Best latency belongs to {} at {:.3f} ms. Best throughput belongs to {} at {:.2f} FPS.".format(
+                best_latency["device"],
+                best_latency["avg_latency_ms"],
+                best_throughput["device"],
+                best_throughput["throughput_fps"],
+            )
+        )
+
+        ordered_latency = sorted(results, key=lambda item: item["avg_latency_ms"])
+        ordered_throughput = sorted(results, key=lambda item: item["throughput_fps"], reverse=True)
+        lines.append(
+            "Latency ranking: {}. Throughput ranking: {}.".format(
+                " < ".join(result["device"] for result in ordered_latency),
+                " > ".join(result["device"] for result in ordered_throughput),
+            )
+        )
+
+        by_device = {result["device"]: result for result in results}
+        if {"CPU", "GPU", "NPU"}.issubset(by_device):
+            cpu = by_device["CPU"]
+            gpu = by_device["GPU"]
+            npu = by_device["NPU"]
+            lines.append(
+                "Compared with CPU, GPU is {:.2f}x faster on latency and {:.2f}x higher on throughput. "
+                "NPU is {:.2f}x faster on latency and {:.2f}x higher on throughput.".format(
+                    cpu["avg_latency_ms"] / gpu["avg_latency_ms"],
+                    gpu["throughput_fps"] / cpu["throughput_fps"],
+                    cpu["avg_latency_ms"] / npu["avg_latency_ms"],
+                    npu["throughput_fps"] / cpu["throughput_fps"],
+                )
+            )
+
+        if config["hint"] == "THROUGHPUT":
+            lines.append(
+                "Because this run favors throughput and uses multiple requests, the result highlights which device handles parallel inference most efficiently. "
+                "That usually benefits GPU or NPU more than CPU."
+            )
+        else:
+            lines.append(
+                "Because this run uses latency mode, the result reflects single-request responsiveness more than maximum total throughput."
+            )
+
+        if config["model_type"] == "cnn":
+            lines.append(
+                "This is still a synthetic CNN, so the conclusion applies to this benchmark workload, not automatically to every real vision model."
+            )
+        else:
+            lines.append(
+                "This is a synthetic dense-tensor MLP workload, so the conclusion applies to matrix-heavy execution patterns more than to every real AI model."
+            )
+
+        primary_winner = best_throughput if config["hint"] == "THROUGHPUT" else best_latency
+        lines.append(
+            "Conclusion: for this exact input size, model type, and benchmark mode, {} is the best device overall.".format(
+                primary_winner["device"]
+            )
+        )
+
+        if failures:
+            lines.append("Devices that failed in this run: {}.".format("; ".join(failures)))
+
+        return "\n\n".join(lines)
 
     def _draw_chart(self, results):
         self.canvas.delete("all")
