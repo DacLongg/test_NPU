@@ -1,0 +1,86 @@
+{
+  "openvino_devices": [
+    "CPU",
+    "GPU",
+    "NPU"
+  ],
+  "config": {
+    "model_type": "cnn",
+    "batch": 4,
+    "features": 1024,
+    "layers": 6,
+    "channels": 3,
+    "height": 224,
+    "width": 224,
+    "dtype": "fp16",
+    "hint": "THROUGHPUT",
+    "num_requests": 4,
+    "warmup": 50,
+    "iterations": 200,
+    "repeats": 3
+  },
+  "results": [
+    {
+      "device": "CPU",
+      "iterations": 200,
+      "warmup": 50,
+      "elapsed_s": 0.8059882929992455,
+      "avg_latency_ms": 4.029941464996227,
+      "throughput_fps": 248.14256204114275,
+      "hint": "THROUGHPUT",
+      "num_requests": 4,
+      "repeats": 3,
+      "runs": [
+        {
+          "elapsed_s": 0.8088080260022252,
+          "avg_latency_ms": 4.044040130011126,
+          "throughput_fps": 247.27746705056776
+        },
+        {
+          "elapsed_s": 0.8059882929992455,
+          "avg_latency_ms": 4.029941464996227,
+          "throughput_fps": 248.14256204114275
+        },
+        {
+          "elapsed_s": 0.743538354003249,
+          "avg_latency_ms": 3.717691770016245,
+          "throughput_fps": 268.9841067689241
+        }
+      ]
+    },
+    {
+      "device": "NPU",
+      "iterations": 200,
+      "warmup": 50,
+      "elapsed_s": 0.24621226399904117,
+      "avg_latency_ms": 1.2310613199952058,
+      "throughput_fps": 812.3072212226555,
+      "hint": "THROUGHPUT",
+      "num_requests": 4,
+      "repeats": 3,
+      "runs": [
+        {
+          "elapsed_s": 0.2563877009997668,
+          "avg_latency_ms": 1.281938504998834,
+          "throughput_fps": 780.0686195949075
+        },
+        {
+          "elapsed_s": 0.24621226399904117,
+          "avg_latency_ms": 1.2310613199952058,
+          "throughput_fps": 812.3072212226555
+        },
+        {
+          "elapsed_s": 0.24485018399718683,
+          "avg_latency_ms": 1.2242509199859342,
+          "throughput_fps": 816.826014728655
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "cpu_vs_npu": {
+      "latency_ratio": 3.273550553121043,
+      "throughput_ratio": 3.2735505531210425
+    }
+  }
+}
